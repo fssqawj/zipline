@@ -24,10 +24,10 @@ from zipline.pipeline.data import USEquityPricing
 from zipline.pipeline.loaders.frame import (
     DataFrameLoader,
 )
-from zipline.utils.calendars import default_nyse_schedule
+from zipline.utils.calendars import default_nyse_calendar
 
 
-trading_day = default_nyse_schedule.day
+trading_day = default_nyse_calendar.day
 
 
 class DataFrameLoaderTestCase(TestCase):

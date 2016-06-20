@@ -1,5 +1,5 @@
 #
-# Copyright 2015 Quantopian, Inc.
+# Copyright 2016 Quantopian, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,14 +14,15 @@
 # limitations under the License.
 
 import logbook
-import datetime
+import pandas as pd
 
 from six import string_types
 from sqlalchemy import create_engine
 
 from zipline.assets import AssetDBWriter, AssetFinder
 from zipline.data.loader import load_market_data
-from zipline.utils.calendars import default_nyse_schedule
+from zipline.utils.calendars import default_nyse_calendar
+from zipline.utils.memoize import remember_last
 
 log = logbook.Logger('Trading')
 
@@ -78,7 +79,7 @@ class TradingEnvironment(object):
         load=None,
         bm_symbol='^GSPC',
         exchange_tz="US/Eastern",
-        trading_schedule=default_nyse_schedule,
+        trading_calendar=default_nyse_calendar,
         asset_db_path=':memory:'
     ):
 
@@ -87,8 +88,8 @@ class TradingEnvironment(object):
             load = load_market_data
 
         self.benchmark_returns, self.treasury_curves = load(
-            trading_schedule.day,
-            trading_schedule.schedule.index,
+            trading_calendar.day,
+            trading_calendar.schedule.index,
             self.bm_symbol,
         )
 
@@ -119,11 +120,23 @@ class TradingEnvironment(object):
 
 class SimulationParameters(object):
     def __init__(self, period_start, period_end,
+                 trading_calendar,
                  capital_base=10e3,
                  emission_rate='daily',
                  data_frequency='daily',
-                 trading_schedule=None,
                  arena='backtest'):
+
+        assert type(period_start) == pd.Timestamp
+        assert type(period_end) == pd.Timestamp
+
+        assert trading_calendar is not None, \
+            "Must pass in trading calendar!"
+        assert period_start <= period_end, \
+            "Period start falls after period end."
+        assert period_start <= trading_calendar.last_trading_session, \
+            "Period start falls after the last known trading day."
+        assert period_end >= trading_calendar.first_trading_session, \
+            "Period end falls before the first known trading day."
 
         self.period_start = period_start
         self.period_end = period_end
@@ -135,55 +148,56 @@ class SimulationParameters(object):
         # copied to algorithm's environment for runtime access
         self.arena = arena
 
-        if trading_schedule is not None:
-            self.update_internal_from_trading_schedule(
-                trading_schedule=trading_schedule
+        self.trading_calendar = trading_calendar
+
+        if self.period_start not in trading_calendar.schedule.index:
+            # if the start date is not a valid session in this calendar,
+            # push it forward to the first valid session
+            self.period_start = trading_calendar.minute_to_session_label(
+                self.period_start
             )
 
-    def update_internal_from_trading_schedule(self, trading_schedule):
+        if self.period_end not in trading_calendar.schedule.index:
+            # if the end date is not a valid session in this calendar,
+            # pull it backward to the last valid session before the given
+            # end date.
+            self.period_end = trading_calendar.minute_to_session_label(
+                self.period_end, direction="previous"
+            )
 
-        assert self.period_start <= self.period_end, \
-            "Period start falls after period end."
+        self.first_open = trading_calendar.open_and_close_for_session(
+            self.period_start
+        )[0]
+        self.last_close = trading_calendar.open_and_close_for_session(
+            self.period_end
+        )[1]
 
-        assert self.period_start <= trading_schedule.last_execution_day, \
-            "Period start falls after the last known trading day."
-        assert self.period_end >= trading_schedule.first_execution_day, \
-            "Period end falls before the first known trading day."
+    @property
+    def first_session(self):
+        return self.period_start
 
-        self.first_open = self._calculate_first_open(trading_schedule)
-        self.last_close = self._calculate_last_close(trading_schedule)
+    @property
+    def last_session(self):
+        return self.period_end
 
-        # Take the length of an inclusive slice of trading dates
-        self.trading_days = trading_schedule.trading_dates(
-            self.first_open, self.last_close
+    @property
+    @remember_last
+    def sessions(self):
+        return self.trading_calendar.sessions_in_range(
+            self.period_start,
+            self.period_end
         )
-        self.days_in_period = len(self.trading_days)
 
-    def _calculate_first_open(self, trading_schedule):
-        """
-        Finds the first trading day on or after self.period_start.
-        """
-        first_open = self.period_start
-        one_day = datetime.timedelta(days=1)
-
-        while not trading_schedule.is_executing_on_day(first_open):
-            first_open = first_open + one_day
-
-        mkt_open, _ = trading_schedule.start_and_end(first_open)
-        return mkt_open
-
-    def _calculate_last_close(self, trading_schedule):
-        """
-        Finds the last trading day on or before self.period_end
-        """
-        last_close = self.period_end
-        one_day = datetime.timedelta(days=1)
-
-        while not trading_schedule.is_executing_on_day(last_close):
-            last_close = last_close - one_day
-
-        _, mkt_close = trading_schedule.start_and_end(last_close)
-        return mkt_close
+    def create_from_copy(self, period_start, period_end):
+        return SimulationParameters(
+            period_start,
+            period_end,
+            self.trading_calendar,
+            capital_base=self.capital_base,
+            emission_rate=self.emission_rate,
+            data_frequency=self.data_frequency,
+            arena=self.arena
+        )
 
     def __repr__(self):
         return """

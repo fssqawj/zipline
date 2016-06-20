@@ -67,7 +67,7 @@ log = logbook.Logger('Risk Report')
 
 
 class RiskReport(object):
-    def __init__(self, algorithm_returns, sim_params, trading_schedule,
+    def __init__(self, algorithm_returns, sim_params, trading_calendar,
                  treasury_curves, benchmark_returns,
                  algorithm_leverages=None):
         """
@@ -80,7 +80,7 @@ class RiskReport(object):
 
         self.algorithm_returns = algorithm_returns
         self.sim_params = sim_params
-        self.trading_schedule = trading_schedule
+        self.trading_calendar = trading_calendar
         self.treasury_curves = treasury_curves
         self.benchmark_returns = benchmark_returns
         self.algorithm_leverages = algorithm_leverages
@@ -142,7 +142,7 @@ class RiskReport(object):
                 end_date=cur_end,
                 returns=self.algorithm_returns,
                 benchmark_returns=self.benchmark_returns,
-                trading_schedule=self.trading_schedule,
+                trading_calendar=self.trading_calendar,
                 treasury_curves=self.treasury_curves,
                 algorithm_leverages=self.algorithm_leverages,
             )

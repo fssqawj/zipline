@@ -57,10 +57,10 @@ from zipline.testing.fixtures import (
     WithSimParams,
     WithTmpDir,
     WithTradingEnvironment,
-    WithTradingSchedule,
+    WithTradingCalendar,
     ZiplineTestCase,
 )
-from zipline.utils.calendars import default_nyse_schedule
+from zipline.utils.calendars import default_nyse_calendar
 
 logger = logging.getLogger('Test Perf Tracking')
 
@@ -178,12 +178,11 @@ def calculate_results(sim_params,
     commissions = commissions or {}
 
     perf_tracker = perf.PerformanceTracker(sim_params,
-                                           default_nyse_schedule,
+                                           default_nyse_calendar,
                                            env)
-
     results = []
 
-    for date in sim_params.trading_days:
+    for date in sim_params.sessions:
         for txn in filter(lambda txn: txn.dt == date, txns):
             # Process txns for this date.
             perf_tracker.process_transaction(txn)
@@ -243,9 +242,9 @@ def setup_env_data(env, sim_params, sids, futures_sids=[]):
     data = {}
     for sid in sids:
         data[sid] = {
-            "start_date": sim_params.trading_days[0],
-            "end_date": default_nyse_schedule.next_execution_day(
-                sim_params.trading_days[-1]
+            "start_date": sim_params.sessions[0],
+            "end_date": default_nyse_calendar.next_session_label(
+                sim_params.sessions[-1]
             )
         }
 
@@ -254,9 +253,9 @@ def setup_env_data(env, sim_params, sids, futures_sids=[]):
     futures_data = {}
     for future_sid in futures_sids:
         futures_data[future_sid] = {
-            "start_date": sim_params.trading_days[0],
-            "end_date": default_nyse_schedule.next_execution_day(
-                sim_params.trading_days[-1]
+            "start_date": sim_params.sessions[0],
+            "end_date": default_nyse_calendar.next_session_label(
+                sim_params.sessions[-1]
             ),
             "multiplier": 100
         }
@@ -280,7 +279,7 @@ class TestSplitPerformance(WithSimParams, WithTmpDir, ZiplineTestCase):
         # if multiple positions all have splits at the same time, verify that
         # the total leftover cash is correct
         perf_tracker = perf.PerformanceTracker(self.sim_params,
-                                               self.trading_schedule,
+                                               self.trading_calendar,
                                                self.env)
 
         asset1 = self.asset_finder.retrieve_asset(1)
@@ -310,14 +309,14 @@ class TestSplitPerformance(WithSimParams, WithTmpDir, ZiplineTestCase):
             [100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         # set up a long position in sid 1
         # 100 shares at $20 apiece = $2000 position
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.tmpdir,
             self.sim_params,
             {1: events},
@@ -422,7 +421,7 @@ class TestDividendPerformance(WithSimParams,
         after = factory.get_next_trading_dt(
             before,
             timedelta(days=1),
-            self.trading_schedule,
+            self.trading_calendar,
         )
         self.assertEqual(after.hour, 13)
 
@@ -434,7 +433,7 @@ class TestDividendPerformance(WithSimParams,
             [100, 100, 100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         dbpath = self.instance_tmpdir.getpath('adjustments.sqlite')
@@ -442,7 +441,7 @@ class TestDividendPerformance(WithSimParams,
         writer = SQLiteAdjustmentWriter(
             dbpath,
             MockDailyBarReader(),
-            self.trading_schedule.all_execution_days,
+            self.trading_calendar.all_sessions,
         )
         splits = mergers = create_empty_splits_mergers_frame()
         dividends = pd.DataFrame({
@@ -457,7 +456,7 @@ class TestDividendPerformance(WithSimParams,
         adjustment_reader = SQLiteAdjustmentReader(dbpath)
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: events},
@@ -500,7 +499,7 @@ class TestDividendPerformance(WithSimParams,
                 [100, 100, 100, 100, 100, 100],
                 oneday,
                 self.sim_params,
-                trading_schedule=self.trading_schedule,
+                trading_calendar=self.trading_calendar,
             )
 
         dbpath = self.instance_tmpdir.getpath('adjustments.sqlite')
@@ -508,7 +507,7 @@ class TestDividendPerformance(WithSimParams,
         writer = SQLiteAdjustmentWriter(
             dbpath,
             MockDailyBarReader(),
-            self.trading_schedule.all_execution_days,
+            self.trading_calendar.all_sessions
         )
         splits = mergers = create_empty_splits_mergers_frame()
         dividends = pd.DataFrame({
@@ -534,7 +533,7 @@ class TestDividendPerformance(WithSimParams,
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             events,
@@ -575,7 +574,7 @@ class TestDividendPerformance(WithSimParams,
             [100, 100, 100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar
         )
 
         dbpath = self.instance_tmpdir.getpath('adjustments.sqlite')
@@ -583,7 +582,7 @@ class TestDividendPerformance(WithSimParams,
         writer = SQLiteAdjustmentWriter(
             dbpath,
             MockDailyBarReader(),
-            self.trading_schedule.all_execution_days,
+            self.trading_calendar.all_sessions
         )
         splits = mergers = create_empty_splits_mergers_frame()
         dividends = pd.DataFrame({
@@ -599,7 +598,7 @@ class TestDividendPerformance(WithSimParams,
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: events},
@@ -637,7 +636,7 @@ class TestDividendPerformance(WithSimParams,
             [100, 100, 100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         dbpath = self.instance_tmpdir.getpath('adjustments.sqlite')
@@ -645,7 +644,7 @@ class TestDividendPerformance(WithSimParams,
         writer = SQLiteAdjustmentWriter(
             dbpath,
             MockDailyBarReader(),
-            self.trading_schedule.all_execution_days,
+            self.trading_calendar.all_sessions,
         )
         splits = mergers = create_empty_splits_mergers_frame()
         dividends = pd.DataFrame({
@@ -661,7 +660,7 @@ class TestDividendPerformance(WithSimParams,
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: events},
@@ -693,6 +692,8 @@ class TestDividendPerformance(WithSimParams,
                          [-1000, -1000, 0, 1000, 1000, 1000])
 
     def test_buy_and_sell_before_ex(self):
+        # need a six-day simparam
+
         # post some trades in the market
         events = factory.create_trade_history(
             self.asset1,
@@ -700,14 +701,14 @@ class TestDividendPerformance(WithSimParams,
             [100, 100, 100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
         dbpath = self.instance_tmpdir.getpath('adjustments.sqlite')
 
         writer = SQLiteAdjustmentWriter(
             dbpath,
             MockDailyBarReader(),
-            self.trading_schedule.all_execution_days,
+            self.trading_calendar.all_sessions,
         )
         splits = mergers = create_empty_splits_mergers_frame()
 
@@ -724,7 +725,7 @@ class TestDividendPerformance(WithSimParams,
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: events},
@@ -761,21 +762,21 @@ class TestDividendPerformance(WithSimParams,
             [100, 100, 100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         pay_date = self.sim_params.first_open
         # find pay date that is much later.
         for i in range(30):
             pay_date = factory.get_next_trading_dt(pay_date, oneday,
-                                                   self.trading_schedule)
+                                                   self.trading_calendar)
 
         dbpath = self.instance_tmpdir.getpath('adjustments.sqlite')
 
         writer = SQLiteAdjustmentWriter(
             dbpath,
             MockDailyBarReader(),
-            self.trading_schedule.all_execution_days,
+            self.trading_calendar.all_sessions,
         )
         splits = mergers = create_empty_splits_mergers_frame()
         dividends = pd.DataFrame({
@@ -791,7 +792,7 @@ class TestDividendPerformance(WithSimParams,
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: events},
@@ -829,7 +830,7 @@ class TestDividendPerformance(WithSimParams,
             [100, 100, 100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         dbpath = self.instance_tmpdir.getpath('adjustments.sqlite')
@@ -837,7 +838,7 @@ class TestDividendPerformance(WithSimParams,
         writer = SQLiteAdjustmentWriter(
             dbpath,
             MockDailyBarReader(),
-            self.trading_schedule.all_execution_days,
+            self.trading_calendar.all_sessions,
         )
         splits = mergers = create_empty_splits_mergers_frame()
         dividends = pd.DataFrame({
@@ -853,7 +854,7 @@ class TestDividendPerformance(WithSimParams,
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: events},
@@ -888,7 +889,7 @@ class TestDividendPerformance(WithSimParams,
             [100, 100, 100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         dbpath = self.instance_tmpdir.getpath('adjustments.sqlite')
@@ -896,7 +897,7 @@ class TestDividendPerformance(WithSimParams,
         writer = SQLiteAdjustmentWriter(
             dbpath,
             MockDailyBarReader(),
-            self.trading_schedule.all_execution_days,
+            self.trading_calendar.all_sessions,
         )
         splits = mergers = create_empty_splits_mergers_frame()
         dividends = pd.DataFrame({
@@ -912,7 +913,7 @@ class TestDividendPerformance(WithSimParams,
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: events},
@@ -941,11 +942,11 @@ class TestDividendPerformance(WithSimParams,
         # post some trades in the market
         events = factory.create_trade_history(
             self.asset1,
-            [10, 10, 10, 10, 10],
-            [100, 100, 100, 100, 100],
+            [10, 10, 10, 10, 10, 10],
+            [100, 100, 100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         dbpath = self.instance_tmpdir.getpath('adjustments.sqlite')
@@ -953,7 +954,7 @@ class TestDividendPerformance(WithSimParams,
         writer = SQLiteAdjustmentWriter(
             dbpath,
             MockDailyBarReader(),
-            self.trading_schedule.all_execution_days,
+            self.trading_calendar.all_sessions,
         )
         splits = mergers = create_empty_splits_mergers_frame()
         dividends = pd.DataFrame({
@@ -963,7 +964,11 @@ class TestDividendPerformance(WithSimParams,
             'ex_date': np.array([events[-2].dt], dtype='datetime64[ns]'),
             'record_date': np.array([events[0].dt], dtype='datetime64[ns]'),
             'pay_date': np.array(
-                [self.trading_schedule.next_execution_day(events[-1].dt)],
+                [self.trading_calendar.next_session_label(
+                    self.trading_calendar.minute_to_session_label(
+                        events[-1].dt
+                    )
+                )],
                 dtype='datetime64[ns]'),
         })
         writer.write(splits, mergers, dividends)
@@ -978,11 +983,10 @@ class TestDividendPerformance(WithSimParams,
         )
 
         sim_params.period_end = events[-1].dt
-        sim_params.update_internal_from_trading_schedule(self.trading_schedule)
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             sim_params,
             {1: events},
@@ -997,18 +1001,18 @@ class TestDividendPerformance(WithSimParams,
             txns=txns,
         )
 
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 6)
         cumulative_returns = \
             [event['cumulative_perf']['returns'] for event in results]
-        self.assertEqual(cumulative_returns, [0.0, 0.0, 0.0, 0.0, 0.0])
+        self.assertEqual(cumulative_returns, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         daily_returns = [event['daily_perf']['returns'] for event in results]
-        self.assertEqual(daily_returns, [0.0, 0.0, 0.0, 0.0, 0.0])
+        self.assertEqual(daily_returns, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         cash_flows = [event['daily_perf']['capital_used'] for event in results]
-        self.assertEqual(cash_flows, [-1000, 0, 0, 0, 0])
+        self.assertEqual(cash_flows, [-1000, 0, 0, 0, 0, 0])
         cumulative_cash_flows = \
             [event['cumulative_perf']['capital_used'] for event in results]
         self.assertEqual(cumulative_cash_flows,
-                         [-1000, -1000, -1000, -1000, -1000])
+                         [-1000, -1000, -1000, -1000, -1000, -1000])
 
 
 class TestDividendPerformanceHolidayStyle(TestDividendPerformance):
@@ -1022,7 +1026,7 @@ class TestDividendPerformanceHolidayStyle(TestDividendPerformance):
     END_DATE = pd.Timestamp('2003-12-08', tz='utc')
 
 
-class TestPositionPerformance(WithInstanceTmpDir, WithTradingSchedule,
+class TestPositionPerformance(WithInstanceTmpDir, WithTradingCalendar,
                               ZiplineTestCase):
     def create_environment_stuff(self,
                                  num_days=4,
@@ -1072,7 +1076,7 @@ class TestPositionPerformance(WithInstanceTmpDir, WithTradingSchedule,
             [100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         trades_2 = factory.create_trade_history(
@@ -1081,12 +1085,12 @@ class TestPositionPerformance(WithInstanceTmpDir, WithTradingSchedule,
             [100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: trades_1, 2: trades_2}
@@ -1178,12 +1182,12 @@ class TestPositionPerformance(WithInstanceTmpDir, WithTradingSchedule,
             [100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: trades})
@@ -1270,12 +1274,12 @@ class TestPositionPerformance(WithInstanceTmpDir, WithTradingSchedule,
             [100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: trades})
@@ -1386,14 +1390,14 @@ single short-sale transaction"""
             [100, 100, 100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         trades_1 = trades[:-2]
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: trades})
@@ -1620,12 +1624,12 @@ cost of sole txn in test"
             [100, 100, 100, 100],
             oneday,
             sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {3: trades}
@@ -1740,12 +1744,12 @@ single short-sale transaction"""
             [100, 100, 100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {3: trades}
@@ -1985,12 +1989,12 @@ trade after cover"""
             [100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: trades})
@@ -2072,14 +2076,14 @@ shares in position"
             [100, 100, 100, 100, 100],
             oneday,
             self.sim_params,
-            self.trading_schedule,
+            self.trading_calendar,
         )
         trades = factory.create_trade_history(*history_args)
         transactions = factory.create_txn_history(*history_args)[:4]
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: trades})
@@ -2091,7 +2095,7 @@ shares in position"
             self.env.asset_finder,
             self.sim_params.data_frequency,
             period_open=self.sim_params.period_start,
-            period_close=self.sim_params.trading_days[-1]
+            period_close=self.sim_params.sessions[-1]
         )
         pp.position_tracker = pt
 
@@ -2198,7 +2202,7 @@ shares in position"
             [200, -100, -100, 100, -300, 100, 500, 400],
             oneday,
             self.sim_params,
-            self.trading_schedule,
+            self.trading_calendar,
         )
         cost_bases = [10, 10, 0, 8, 9, 9, 13, 13.5]
 
@@ -2234,12 +2238,12 @@ shares in position"
             [100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: trades})
@@ -2279,12 +2283,12 @@ shares in position"
             [100, 100, 100, 100],
             oneday,
             self.sim_params,
-            trading_schedule=self.trading_schedule,
+            trading_calendar=self.trading_calendar,
         )
 
         data_portal = create_data_portal_from_trade_history(
             self.env.asset_finder,
-            self.trading_schedule,
+            self.trading_calendar,
             self.instance_tmpdir,
             self.sim_params,
             {1: trades})

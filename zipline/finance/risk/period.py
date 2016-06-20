@@ -41,7 +41,7 @@ choose_treasury = functools.partial(risk.choose_treasury,
 
 
 class RiskMetricsPeriod(object):
-    def __init__(self, start_date, end_date, returns, trading_schedule,
+    def __init__(self, start_date, end_date, returns, trading_calendar,
                  treasury_curves, benchmark_returns, algorithm_leverages=None):
 
         if treasury_curves.index[-1] >= start_date:
@@ -56,14 +56,14 @@ class RiskMetricsPeriod(object):
 
         self.start_date = start_date
         self.end_date = end_date
-        self.trading_schedule = trading_schedule
+        self.trading_calendar = trading_calendar
 
-        trading_dates = trading_schedule.trading_dates(
-            start=self.start_date,
-            end=self.end_date,
+        trading_sessions = trading_calendar.sessions_in_range(
+            self.start_date,
+            self.end_date,
         )
         self.algorithm_returns = self.mask_returns_to_period(returns,
-                                                             trading_dates)
+                                                             trading_sessions)
 
         # Benchmark needs to be masked to the same dates as the algo returns
         self.benchmark_returns = self.mask_returns_to_period(
@@ -110,7 +110,7 @@ class RiskMetricsPeriod(object):
             self.treasury_curves,
             self.start_date,
             self.end_date,
-            self.trading_schedule,
+            self.trading_calendar,
         )
         self.sharpe = self.calculate_sharpe()
         # The consumer currently expects a 0.0 value for sharpe in period,

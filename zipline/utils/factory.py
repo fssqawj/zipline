@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Quantopian, Inc.
+# Copyright 2016 Quantopian, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ from zipline.data.loader import (  # For backwards compatibility
     load_from_yahoo,
     load_bars_from_yahoo,
 )
-from zipline.utils.calendars import default_nyse_schedule
+from zipline.utils.calendars import default_nyse_calendar
 
 
 __all__ = ['load_from_yahoo', 'load_bars_from_yahoo']
@@ -40,49 +40,48 @@ def create_simulation_parameters(year=2006, start=None, end=None,
                                  num_days=None,
                                  data_frequency='daily',
                                  emission_rate='daily',
-                                 trading_schedule=default_nyse_schedule):
+                                 trading_calendar=default_nyse_calendar):
     if start is None:
         start = pd.Timestamp("{0}-01-01".format(year), tz='UTC')
+
     if end is None:
         if num_days:
-            start_index = trading_schedule.all_execution_days\
-                .searchsorted(start)
-            end = trading_schedule.all_execution_days[
-                start_index + num_days - 1
-            ]
+            start_index = trading_calendar.all_sessions.searchsorted(start)
+            end = trading_calendar.all_sessions[start_index + num_days - 1]
         else:
             end = pd.Timestamp("{0}-12-31".format(year), tz='UTC')
+
     sim_params = SimulationParameters(
         period_start=start,
         period_end=end,
         capital_base=capital_base,
         data_frequency=data_frequency,
         emission_rate=emission_rate,
-        trading_schedule=trading_schedule,
+        trading_calendar=trading_calendar,
     )
 
     return sim_params
 
 
-def get_next_trading_dt(current, interval, trading_schedule):
-    next_dt = pd.Timestamp(current).tz_convert(trading_schedule.tz)
+def get_next_trading_dt(current, interval, trading_calendar):
+    next_dt = pd.Timestamp(current).tz_convert(trading_calendar.tz)
 
     while True:
         # Convert timestamp to naive before adding day, otherwise the when
         # stepping over EDT an hour is added.
         next_dt = pd.Timestamp(next_dt.replace(tzinfo=None))
         next_dt = next_dt + interval
-        next_dt = pd.Timestamp(next_dt, tz=trading_schedule.tz)
+        next_dt = pd.Timestamp(next_dt, tz=trading_calendar.tz)
         next_dt_utc = next_dt.tz_convert('UTC')
-        if trading_schedule.is_executing_on_minute(next_dt_utc):
+        if trading_calendar.is_open_on_minute(next_dt_utc):
             break
-        next_dt = next_dt_utc.tz_convert(trading_schedule.tz)
+        next_dt = next_dt_utc.tz_convert(trading_calendar.tz)
 
     return next_dt_utc
 
 
 def create_trade_history(sid, prices, amounts, interval, sim_params,
-                         trading_schedule, source_id="test_factory"):
+                         trading_calendar, source_id="test_factory"):
     trades = []
     current = sim_params.first_open
 
@@ -95,7 +94,7 @@ def create_trade_history(sid, prices, amounts, interval, sim_params,
             trade_dt = current
         trade = create_trade(sid, price, amount, trade_dt, source_id)
         trades.append(trade)
-        current = get_next_trading_dt(current, interval, trading_schedule)
+        current = get_next_trading_dt(current, interval, trading_calendar)
 
     assert len(trades) == len(prices)
     return trades
@@ -156,12 +155,12 @@ def create_txn(sid, price, amount, datetime):
 
 
 def create_txn_history(sid, priceList, amtList, interval, sim_params,
-                       trading_schedule):
+                       trading_calendar):
     txns = []
     current = sim_params.first_open
 
     for price, amount in zip(priceList, amtList):
-        current = get_next_trading_dt(current, interval, trading_schedule)
+        current = get_next_trading_dt(current, interval, trading_calendar)
 
         txns.append(create_txn(sid, price, amount, current))
         current = current + interval
@@ -169,16 +168,16 @@ def create_txn_history(sid, priceList, amtList, interval, sim_params,
 
 
 def create_returns_from_range(sim_params):
-    return pd.Series(index=sim_params.trading_days,
-                     data=np.random.rand(len(sim_params.trading_days)))
+    return pd.Series(index=sim_params.sessions,
+                     data=np.random.rand(len(sim_params.sessions)))
 
 
 def create_returns_from_list(returns, sim_params):
-    return pd.Series(index=sim_params.trading_days[:len(returns)],
+    return pd.Series(index=sim_params.sessions[:len(returns)],
                      data=returns)
 
 
-def create_daily_trade_source(sids, sim_params, env, trading_schedule,
+def create_daily_trade_source(sids, sim_params, env, trading_calendar,
                               concurrent=False):
     """
     creates trade_count trades for each sid in sids list.
@@ -191,17 +190,17 @@ def create_daily_trade_source(sids, sim_params, env, trading_schedule,
         timedelta(days=1),
         sim_params,
         env=env,
-        trading_schedule=trading_schedule,
+        trading_calendar=trading_calendar,
         concurrent=concurrent,
     )
 
 
 def create_trade_source(sids, trade_time_increment, sim_params, env,
-                        trading_schedule, concurrent=False):
+                        trading_calendar, concurrent=False):
 
     # If the sim_params define an end that is during market hours, that will be
     # used as the end of the data source
-    if trading_schedule.is_executing_on_minute(sim_params.period_end):
+    if trading_calendar.is_open_on_minute(sim_params.period_end):
         end = sim_params.period_end
     # Otherwise, the last_close after the period_end is used as the end of the
     # data source
@@ -217,7 +216,7 @@ def create_trade_source(sids, trade_time_increment, sim_params, env,
         'filter': sids,
         'concurrent': concurrent,
         'env': env,
-        'trading_schedule': trading_schedule,
+        'trading_calendar': trading_calendar,
     }
     source = SpecificEquityTrades(*args, **kwargs)
 
