@@ -600,6 +600,7 @@ class WithEquityDailyBarData(WithTradingEnvironment):
     zipline.testing.create_daily_bar_data
     """
     EQUITY_DAILY_BAR_LOOKBACK_DAYS = 0
+
     EQUITY_DAILY_BAR_USE_FULL_CALENDAR = False
     EQUITY_DAILY_BAR_START_DATE = alias('START_DATE')
     EQUITY_DAILY_BAR_END_DATE = alias('END_DATE')
@@ -828,7 +829,7 @@ class WithEquityMinuteBarData(WithTradingEnvironment):
                 first_session = cls.trading_calendar.sessions_window(
                     first_session,
                     -1 * cls.EQUITY_MINUTE_BAR_LOOKBACK_DAYS
-                )[-1]
+                )[0]
 
             days = cls.trading_calendar.sessions_in_range(
                 first_session,
