@@ -137,8 +137,8 @@ class BenchmarkSource(object):
         change from close to close.
         """
         if self.emission_rate == "minute":
-            minutes = trading_calendar.minutes_in_range(
-                self.trading_days[0], self.trading_days[-1]
+            minutes = trading_calendar.minutes_for_sessions_in_range(
+                self.sessions[0], self.sessions[-1]
             )
             benchmark_series = data_portal.get_history_window(
                 [asset],

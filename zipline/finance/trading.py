@@ -15,7 +15,7 @@
 
 import logbook
 import pandas as pd
-
+from pandas.tslib import normalize_date
 from six import string_types
 from sqlalchemy import create_engine
 
@@ -138,8 +138,11 @@ class SimulationParameters(object):
         assert period_end >= trading_calendar.first_trading_session, \
             "Period end falls before the first known trading day."
 
-        self.period_start = period_start
-        self.period_end = period_end
+        # chop off any minutes or hours on the given start and end dates,
+        # as we only support session labels here (and we represent session
+        # labels as midnight UTC).
+        self.period_start = normalize_date(period_start)
+        self.period_end = normalize_date(period_end)
         self.capital_base = capital_base
 
         self.emission_rate = emission_rate

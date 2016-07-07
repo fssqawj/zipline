@@ -19,7 +19,7 @@ Factory functions to prepare useful data.
 """
 import pandas as pd
 import numpy as np
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 from zipline.protocol import Event, DATASOURCE_TYPE
 from zipline.sources import SpecificEquityTrades
@@ -43,6 +43,8 @@ def create_simulation_parameters(year=2006, start=None, end=None,
                                  trading_calendar=default_nyse_calendar):
     if start is None:
         start = pd.Timestamp("{0}-01-01".format(year), tz='UTC')
+    elif type(start) == datetime:
+        start = pd.Timestamp(start)
 
     if end is None:
         if num_days:
@@ -50,6 +52,8 @@ def create_simulation_parameters(year=2006, start=None, end=None,
             end = trading_calendar.all_sessions[start_index + num_days - 1]
         else:
             end = pd.Timestamp("{0}-12-31".format(year), tz='UTC')
+    elif type(end) == datetime:
+        end = pd.Timestamp(end)
 
     sim_params = SimulationParameters(
         period_start=start,

@@ -657,7 +657,7 @@ class WithEquityDailyBarData(WithTradingEnvironment):
             days = cls.trading_calendar.all_sessions
         else:
             first_session = cls.trading_calendar.minute_to_session_label(
-                cls.EQUITY_DAILY_BAR_START_DATE
+                pd.Timestamp(cls.EQUITY_DAILY_BAR_START_DATE)
             )
 
             if cls.EQUITY_DAILY_BAR_LOOKBACK_DAYS > 0:
@@ -822,7 +822,7 @@ class WithEquityMinuteBarData(WithTradingEnvironment):
             days = cls.trading_calendar.all_execution_days
         else:
             first_session = cls.trading_calendar.minute_to_session_label(
-                cls.EQUITY_MINUTE_BAR_START_DATE
+                pd.Timestamp(cls.EQUITY_MINUTE_BAR_START_DATE)
             )
 
             if cls.EQUITY_MINUTE_BAR_LOOKBACK_DAYS > 0:
